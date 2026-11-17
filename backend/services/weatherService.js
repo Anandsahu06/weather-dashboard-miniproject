@@ -59,7 +59,7 @@ async function fetchWithTimeout(url) {
   // Handle HTTP status codes
   if (!response.ok) {
     if (response.status === 401) {
-      const error = new Error('The OpenWeather API key is invalid or unauthorized. Please verify your key.');
+      const error = new Error('The OpenWeather API key is unauthorized or pending activation. (Note: Newly created OpenWeather keys usually take 10 to 30 minutes to activate across OpenWeather servers).');
       error.code = 'INVALID_API_KEY';
       error.status = 401;
       throw error;
