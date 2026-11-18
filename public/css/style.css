@@ -1,6 +1,6 @@
 /* ==========================================================================
    WEATHER DASHBOARD - CLEAN HUMAN-DESIGNED LIGHT THEME
-   College Mini Project - Weather Information System
+   A Location-Aware Weather Dashboard with Smart Recommendations
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
@@ -34,8 +34,13 @@
   --accent-blue-hover: #1d4ed8;
   --accent-subtle-blue: #eff6ff;
   --accent-amber: #d97706;
+  --accent-amber-subtle: #fef3c7;
   --accent-green: #16a34a;
+  --accent-green-subtle: #dcfce7;
+  --accent-teal: #0d9488;
+  --accent-teal-subtle: #ccfbf1;
   --accent-red: #dc2626;
+  --accent-red-subtle: #fee2e2;
 
   /* Elevation Shadows */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -86,7 +91,7 @@ body {
 
 .container {
   width: 100%;
-  max-width: 920px;
+  max-width: 960px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -103,7 +108,7 @@ body {
 }
 
 .header-inner {
-  max-width: 920px;
+  max-width: 960px;
   margin: 0 auto;
   display: flex;
   justify-content: space-between;
@@ -118,8 +123,8 @@ body {
 }
 
 .brand-icon {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-md);
   background-color: var(--accent-subtle-blue);
   color: var(--accent-blue);
@@ -130,8 +135,8 @@ body {
 }
 
 .brand-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 
 .brand-title {
@@ -526,7 +531,7 @@ body {
 }
 
 .default-desc {
-  max-width: 480px;
+  max-width: 520px;
   font-size: 0.9rem;
   color: var(--text-muted);
   line-height: 1.5;
@@ -558,9 +563,15 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   7. Weather Dashboard Card (Compact Single-Page Layout)
+   7. Weather Dashboard Main View Container
    -------------------------------------------------------------------------- */
-.weather-dashboard-card {
+.weather-dashboard-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.weather-main-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
@@ -570,7 +581,7 @@ body {
 
 /* Card Header */
 .card-header-row {
-  padding: 1.5rem 1.75rem 1rem;
+  padding: 1.25rem 1.5rem 0.85rem;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -583,7 +594,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 0.6rem;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
   flex-wrap: wrap;
 }
 
@@ -625,12 +636,12 @@ body {
   border-radius: var(--radius-pill);
 }
 
-/* Main Body: Hero Temp + Consolidated Metrics Panel */
-.weather-body-grid {
-  padding: 1.75rem;
+/* Primary Weather + Comfort Score Row */
+.primary-weather-row {
+  padding: 1.5rem;
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 2rem;
+  grid-template-columns: 1fr 340px;
+  gap: 1.75rem;
   align-items: center;
 }
 
@@ -638,7 +649,7 @@ body {
 .hero-temp-block {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .temp-row {
@@ -669,8 +680,8 @@ body {
 }
 
 .condition-icon {
-  width: 58px;
-  height: 58px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
   background-color: var(--bg-subtle);
   border-radius: var(--radius-md);
@@ -700,8 +711,443 @@ body {
   color: var(--text-secondary);
 }
 
-/* Right Metrics Panel (Consolidated 6 Metrics Grid) */
-.metrics-panel {
+/* --------------------------------------------------------------------------
+   8. Weather Comfort Score Card (Feature 3)
+   -------------------------------------------------------------------------- */
+.comfort-score-card {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.comfort-score-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.comfort-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.comfort-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  background-color: #ffffff;
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+}
+
+.comfort-tag.very-comfortable {
+  background-color: var(--accent-green-subtle);
+  border-color: #86efac;
+  color: var(--accent-green);
+}
+
+.comfort-tag.comfortable {
+  background-color: var(--accent-teal-subtle);
+  border-color: #99f6e4;
+  color: var(--accent-teal);
+}
+
+.comfort-tag.moderate {
+  background-color: var(--accent-amber-subtle);
+  border-color: #fde68a;
+  color: var(--accent-amber);
+}
+
+.comfort-tag.uncomfortable {
+  background-color: #ffedd5;
+  border-color: #fed7aa;
+  color: #ea580c;
+}
+
+.comfort-tag.poor {
+  background-color: var(--accent-red-subtle);
+  border-color: #fca5a5;
+  color: var(--accent-red);
+}
+
+.comfort-score-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.comfort-gauge {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+}
+
+.comfort-number {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.comfort-max {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.comfort-breakdown {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.comfort-metric-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.comfort-metric-pill .pill-name {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.comfort-metric-pill strong {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.comfort-caption {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding-top: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   9. Smart Panels & Insights Grid (Features 2, 5 & 6)
+   -------------------------------------------------------------------------- */
+.smart-panel {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.smart-insights-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.panel-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.panel-icon-wrap svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-amber {
+  background-color: var(--accent-amber-subtle);
+  color: var(--accent-amber);
+}
+
+.icon-blue {
+  background-color: var(--accent-subtle-blue);
+  color: var(--accent-blue);
+}
+
+.icon-teal {
+  background-color: var(--accent-teal-subtle);
+  color: var(--accent-teal);
+}
+
+.panel-title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Recommendations List */
+.recommendations-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rec-item {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rec-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.rec-badge-icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.rec-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.rec-reason {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding-left: 1.5rem;
+}
+
+.rec-reason strong {
+  color: var(--text-secondary);
+}
+
+/* Planner Box */
+.planner-box {
+  background-color: var(--bg-subtle);
+  border-left: 3px solid var(--accent-blue);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.planner-headline {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.planner-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Weather Alerts Container */
+.alerts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.alert-item {
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+}
+
+.alert-item.severity-high {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.alert-item.severity-moderate {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.alert-item.severity-low {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.alert-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.alert-item-title {
+  font-weight: 700;
+}
+
+.alert-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+}
+
+.severity-high .alert-badge {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.severity-moderate .alert-badge {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.severity-low .alert-badge {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.alert-item-reason {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+/* --------------------------------------------------------------------------
+   10. Hourly Forecast Section (Feature 4)
+   -------------------------------------------------------------------------- */
+.forecast-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.forecast-header {
+  margin-bottom: 0.75rem;
+}
+
+.forecast-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.forecast-subtitle {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.hourly-timeline {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
+}
+
+.hourly-timeline::-webkit-scrollbar {
+  height: 6px;
+}
+
+.hourly-timeline::-webkit-scrollbar-thumb {
+  background-color: var(--border-light);
+  border-radius: var(--radius-pill);
+}
+
+.hourly-card {
+  min-width: 95px;
+  flex: 1;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.hourly-card.active-slot {
+  background-color: var(--accent-subtle-blue);
+  border-color: #bfdbfe;
+}
+
+.hourly-time {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.hourly-icon {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+.hourly-temp {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hourly-pop {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  background-color: #ffffff;
+  border: 1px solid #bfdbfe;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-pill);
+}
+
+/* --------------------------------------------------------------------------
+   11. Atmospheric Metrics Grid (Consolidated 6 Metrics)
+   -------------------------------------------------------------------------- */
+.metrics-panel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.metrics-section-title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.85rem;
@@ -760,11 +1206,14 @@ body {
   color: var(--text-muted);
 }
 
-/* Solar & Astronomical Strip */
+/* --------------------------------------------------------------------------
+   12. Solar & Astronomical Strip
+   -------------------------------------------------------------------------- */
+.solar-strip-card {
+  padding: 0.85rem 1.25rem;
+}
+
 .solar-strip {
-  border-top: 1px solid var(--border-light);
-  background-color: #fafbfc;
-  padding: 1rem 1.75rem;
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -805,7 +1254,7 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   8. Minimal Footer
+   13. Minimal Footer
    -------------------------------------------------------------------------- */
 .app-footer {
   text-align: center;
@@ -818,16 +1267,16 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   9. Responsive Design
+   14. Responsive Design (Media Queries)
    -------------------------------------------------------------------------- */
-@media (max-width: 820px) {
-  .weather-body-grid {
+@media (max-width: 860px) {
+  .primary-weather-row {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
 
-  .metrics-panel {
-    grid-template-columns: repeat(3, 1fr);
+  .smart-insights-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -859,7 +1308,7 @@ body {
     width: 100%;
   }
 
-  .metrics-panel {
+  .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
@@ -867,7 +1316,6 @@ body {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
-    padding: 1.25rem;
   }
 
   .solar-divider {
@@ -880,11 +1328,17 @@ body {
 }
 
 @media (max-width: 440px) {
-  .metrics-panel {
+  .metrics-grid {
     grid-template-columns: 1fr;
   }
 
   .city-heading {
     font-size: 1.45rem;
+  }
+
+  .comfort-score-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
   }
 }

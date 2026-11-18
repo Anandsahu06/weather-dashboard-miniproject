@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Weather Dashboard: Real-time weather information system using OpenWeather Web API.">
-  <title>Weather Dashboard | Real-Time Weather Information</title>
+  <meta name="description" content="Weather Dashboard: A Location-Aware Weather Dashboard with Smart Recommendations.">
+  <title>Weather Dashboard | Location-Aware Weather & Smart Recommendations</title>
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -12,7 +12,7 @@
   <div class="app-wrapper">
 
     <!-- ==========================================
-         A. HEADER
+         HEADER
          ========================================== -->
     <header class="app-header">
       <div class="header-inner">
@@ -24,12 +24,12 @@
           </div>
           <div class="brand-info">
             <h1 class="brand-title">Weather Dashboard</h1>
-            <p class="brand-subtitle">Real-time weather information</p>
+            <p class="brand-subtitle">A Location-Aware Weather Dashboard with Smart Recommendations</p>
           </div>
         </div>
 
         <div class="header-meta">
-          <div class="status-indicator" id="serverStatus" title="API Status">
+          <div class="status-indicator" id="serverStatus" title="Backend Status">
             <span class="status-dot"></span>
             <span class="status-text" id="serverStatusText">Connecting...</span>
           </div>
@@ -45,9 +45,9 @@
       <div class="container">
 
         <!-- ==========================================
-             B. SEARCH & CURRENT LOCATION SECTION
+             SEARCH & GEOLOCATION CONTROLS
              ========================================== -->
-        <section class="search-section" aria-label="Search controls">
+        <section class="search-section" aria-label="Search and location controls">
           <div class="search-bar-row">
             <div class="search-field-container">
               <span class="search-field-icon" aria-hidden="true">
@@ -78,8 +78,7 @@
               <ul id="autocompleteList" class="autocomplete-dropdown hidden" role="listbox" aria-label="City suggestions"></ul>
             </div>
 
-            <!-- Action Buttons -->
-            <button type="button" id="locationBtn" class="btn btn-secondary location-btn" title="Use current geographic location">
+            <button type="button" id="locationBtn" class="btn btn-secondary location-btn" title="Use browser geolocation">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
@@ -133,7 +132,7 @@
              ========================================== -->
         <div id="loadingState" class="state-panel loading-panel hidden" aria-live="assertive">
           <div class="spinner"></div>
-          <p class="loading-msg" id="loadingMessage">Fetching live weather data...</p>
+          <p class="loading-msg" id="loadingMessage">Fetching live meteorological data...</p>
         </div>
 
         <!-- ==========================================
@@ -146,53 +145,155 @@
               <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
             </svg>
           </div>
-          <h2 class="default-title">Check Current Weather Worldwide</h2>
+          <h2 class="default-title">Check Current Weather & Smart Recommendations</h2>
           <p class="default-desc">
-            Enter a city name above, select from autocomplete suggestions, or click <strong>Use My Location</strong> to retrieve real-time atmospheric measurements.
+            Search any city worldwide, select from autocomplete suggestions, or click <strong>Use My Location</strong> to retrieve real-time weather metrics, comfort scoring, hourly forecasts, and daily planning tips.
           </p>
         </div>
 
         <!-- ==========================================
-             C, D, E. MAIN WEATHER DISPLAY (COMPACT LAYOUT)
+             WEATHER DASHBOARD MAIN CARD (COMPACT VIEW)
              ========================================== -->
-        <article id="weatherResults" class="weather-dashboard-card hidden">
+        <div id="weatherResults" class="weather-dashboard-view hidden">
 
-          <!-- Location & Header Row -->
-          <div class="card-header-row">
-            <div class="location-group">
-              <div class="city-line">
-                <h2 class="city-heading" id="displayCity">--</h2>
-                <span class="country-pill" id="displayCountry">--</span>
-              </div>
-              <div class="meta-subline">
-                <span class="coord-label" id="displayCoordinates">--° N, --° E</span>
-                <span class="meta-dot" aria-hidden="true">•</span>
-                <span class="local-time" id="displayLocalTime">Local Time: --</span>
-              </div>
-            </div>
-            <div class="updated-tag" id="displayLastUpdated">Updated just now</div>
-          </div>
-
-          <!-- Main Weather Block: Hero Temp + Key Metrics -->
-          <div class="weather-body-grid">
-            
-            <!-- Primary Weather Focus -->
-            <div class="hero-temp-block">
-              <div class="temp-row">
-                <span class="current-temp" id="displayTemp">--</span>
-                <span class="temp-degree">°C</span>
-              </div>
-              <div class="condition-row">
-                <img id="weatherIconImg" src="" alt="Weather Icon" class="condition-icon" />
-                <div class="condition-meta">
-                  <span class="condition-name" id="displayCondition">--</span>
-                  <span class="feels-like-label">Feels like <strong id="displayFeelsLikeHero">--°C</strong></span>
+          <!-- 1. Location & Header Meta Row -->
+          <article class="weather-main-card">
+            <div class="card-header-row">
+              <div class="location-group">
+                <div class="city-line">
+                  <h2 class="city-heading" id="displayCity">--</h2>
+                  <span class="country-pill" id="displayCountry">--</span>
+                </div>
+                <div class="meta-subline">
+                  <span class="coord-label" id="displayCoordinates">--° N, --° E</span>
+                  <span class="meta-dot" aria-hidden="true">•</span>
+                  <span class="local-time" id="displayLocalTime">Local: --</span>
                 </div>
               </div>
+              <div class="updated-tag" id="displayLastUpdated">Updated just now</div>
             </div>
 
-            <!-- Consolidated Metrics Panel (6 Atmospheric Parameters) -->
-            <div class="metrics-panel">
+            <!-- 2. Primary Weather + Comfort Score Row -->
+            <div class="primary-weather-row">
+              
+              <!-- Left: Hero Temperature Block -->
+              <div class="hero-temp-block">
+                <div class="temp-row">
+                  <span class="current-temp" id="displayTemp">--</span>
+                  <span class="temp-degree">°C</span>
+                </div>
+                <div class="condition-row">
+                  <img id="weatherIconImg" src="" alt="Weather Icon" class="condition-icon" />
+                  <div class="condition-meta">
+                    <span class="condition-name" id="displayCondition">--</span>
+                    <span class="feels-like-label">Feels like <strong id="displayFeelsLikeHero">--°C</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Weather Comfort Score Card (0-100) -->
+              <div class="comfort-score-card">
+                <div class="comfort-score-header">
+                  <span class="comfort-title">Weather Comfort Score</span>
+                  <span class="comfort-tag" id="comfortBadge">Calculating...</span>
+                </div>
+                <div class="comfort-score-body">
+                  <div class="comfort-gauge">
+                    <span class="comfort-number" id="valComfortScore">--</span>
+                    <span class="comfort-max">/100</span>
+                  </div>
+                  <div class="comfort-breakdown">
+                    <div class="comfort-metric-pill" title="Temperature factor (40% weight)">
+                      <span class="pill-name">Temp</span>
+                      <strong id="comfortTempFactor">--</strong>
+                    </div>
+                    <div class="comfort-metric-pill" title="Humidity factor (30% weight)">
+                      <span class="pill-name">Humidity</span>
+                      <strong id="comfortHumidFactor">--</strong>
+                    </div>
+                    <div class="comfort-metric-pill" title="Wind factor (30% weight)">
+                      <span class="pill-name">Wind</span>
+                      <strong id="comfortWindFactor">--</strong>
+                    </div>
+                  </div>
+                </div>
+                <p class="comfort-caption" id="comfortSummary">Analyzing atmospheric comfort conditions...</p>
+              </div>
+
+            </div>
+          </article>
+
+          <!-- 3. Smart Recommendations & Daily Planner Row -->
+          <div class="smart-insights-grid">
+            
+            <!-- Recommendations Card -->
+            <article class="smart-panel recommendations-panel">
+              <div class="panel-header">
+                <div class="panel-icon-wrap icon-amber" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01"/>
+                  </svg>
+                </div>
+                <h3 class="panel-title">Smart Weather Recommendations</h3>
+              </div>
+              <ul class="recommendations-list" id="recommendationsList">
+                <!-- Dynamically populated by rule-based engine -->
+              </ul>
+            </article>
+
+            <!-- Plan Your Day & Alerts Card -->
+            <article class="smart-panel planner-panel">
+              <div class="panel-header">
+                <div class="panel-icon-wrap icon-blue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                </div>
+                <h3 class="panel-title">Plan Your Day & Notifications</h3>
+              </div>
+              
+              <!-- Daily Planner Recommendation -->
+              <div class="planner-box" id="dailyPlannerBox">
+                <strong class="planner-headline" id="plannerHeadline">Analyzing optimal outdoor hours...</strong>
+                <p class="planner-desc" id="plannerAdvice">Evaluating upcoming forecast intervals...</p>
+              </div>
+
+              <!-- Weather Alerts / Notifications -->
+              <div class="alerts-container" id="weatherAlertsContainer">
+                <!-- Dynamically populated -->
+              </div>
+            </article>
+
+          </div>
+
+          <!-- 4. Hourly Forecast Section (Next 24 Hours) -->
+          <article class="smart-panel forecast-panel">
+            <div class="panel-header forecast-header">
+              <div class="panel-icon-wrap icon-teal" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+              </div>
+              <div class="forecast-title-group">
+                <h3 class="panel-title">Upcoming Forecast (Next 24 Hours)</h3>
+                <span class="forecast-subtitle">3-hour meteorological intervals</span>
+              </div>
+            </div>
+
+            <div class="hourly-timeline" id="hourlyForecastTimeline">
+              <!-- Dynamically populated with next 8 forecast slots -->
+            </div>
+          </article>
+
+          <!-- 5. Atmospheric Metrics Panel (6 Detailed Parameters) -->
+          <article class="smart-panel metrics-panel-card">
+            <h3 class="metrics-section-title">Atmospheric Observations</h3>
+            <div class="metrics-grid">
               
               <!-- 1. Humidity -->
               <div class="metric-cell">
@@ -240,10 +341,10 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>
                   </svg>
-                  <span class="metric-label">Feels Like</span>
+                  <span class="metric-label">Perceived Temp</span>
                 </div>
                 <div class="metric-val"><span id="valFeelsLike">--</span><span class="unit">°C</span></div>
-                <span class="metric-subtext" id="feelsLikeSummary">Perceived</span>
+                <span class="metric-subtext" id="feelsLikeSummary">Thermal index</span>
               </div>
 
               <!-- 5. Visibility -->
@@ -272,56 +373,58 @@
               </div>
 
             </div>
-          </div>
+          </article>
 
-          <!-- Solar & Astronomical Schedule (Local City Time) -->
-          <div class="solar-strip">
-            <div class="solar-col">
-              <span class="solar-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 2v6M4.93 10.93l1.41 1.41M20 18h2M2 18h2M19.07 10.93l-1.41 1.41M22 22H2M8 6l4-4 4 4M16 18a4 4 0 0 0-8 0"/>
-                </svg>
-                Sunrise
-              </span>
-              <span class="solar-val" id="valSunrise">--:-- --</span>
+          <!-- 6. Solar Schedule Strip -->
+          <article class="smart-panel solar-strip-card">
+            <div class="solar-strip">
+              <div class="solar-col">
+                <span class="solar-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 2v6M4.93 10.93l1.41 1.41M20 18h2M2 18h2M19.07 10.93l-1.41 1.41M22 22H2M8 6l4-4 4 4M16 18a4 4 0 0 0-8 0"/>
+                  </svg>
+                  Sunrise
+                </span>
+                <span class="solar-val" id="valSunrise">--:-- --</span>
+              </div>
+
+              <div class="solar-divider" aria-hidden="true"></div>
+
+              <div class="solar-col">
+                <span class="solar-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 10V4M4.93 10.93l1.41 1.41M20 18h2M2 18h2M19.07 10.93l-1.41 1.41M22 22H2M16 8l-4 4-4-4M16 18a4 4 0 0 0-8 0"/>
+                  </svg>
+                  Sunset
+                </span>
+                <span class="solar-val" id="valSunset">--:-- --</span>
+              </div>
+
+              <div class="solar-divider" aria-hidden="true"></div>
+
+              <div class="solar-col">
+                <span class="solar-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  Day Length
+                </span>
+                <span class="solar-val" id="valDayLength">-- hrs -- mins</span>
+              </div>
             </div>
+          </article>
 
-            <div class="solar-divider" aria-hidden="true"></div>
-
-            <div class="solar-col">
-              <span class="solar-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 10V4M4.93 10.93l1.41 1.41M20 18h2M2 18h2M19.07 10.93l-1.41 1.41M22 22H2M16 8l-4 4-4-4M16 18a4 4 0 0 0-8 0"/>
-                </svg>
-                Sunset
-              </span>
-              <span class="solar-val" id="valSunset">--:-- --</span>
-            </div>
-
-            <div class="solar-divider" aria-hidden="true"></div>
-
-            <div class="solar-col">
-              <span class="solar-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 6 12 12 16 14"/>
-                </svg>
-                Day Length
-              </span>
-              <span class="solar-val" id="valDayLength">-- hrs -- mins</span>
-            </div>
-          </div>
-
-        </article>
+        </div>
 
       </div>
     </main>
 
     <!-- ==========================================
-         F. MINIMAL FOOTER
+         MINIMAL FOOTER
          ========================================== -->
     <footer class="app-footer">
-      <p>Weather data provided by OpenWeather API</p>
+      <p>Weather data provided by OpenWeather API • Rule-based educational decision system</p>
     </footer>
 
   </div>

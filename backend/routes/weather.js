@@ -1,12 +1,13 @@
 /**
- * Weather & Health Routes
+ * Weather, Forecast & Health Routes
  * 
  * Handles incoming HTTP requests for:
  * - GET /api/health       -> Health check status
- * - GET /api/weather      -> Fetch weather by city query parameter or coordinates (lat, lon)
+ * - GET /api/weather      -> Fetch current weather + forecast by city or coordinates
+ * - GET /api/forecast     -> Standalone forecast endpoint by coordinates or city
  * - GET /api/suggestions  -> Dynamic city autocomplete suggestions
  * 
- * College Mini Project - Weather Dashboard
+ * College Mini Project - Location-Aware Weather Dashboard
  */
 
 const express = require('express');
@@ -117,6 +118,57 @@ router.get('/weather', async (req, res) => {
       success: false,
       error: error.message || 'An unexpected error occurred while fetching weather data.',
       code: error.code || 'INTERNAL_ERROR'
+    });
+  }
+});
+
+/**
+ * Standalone Forecast Endpoint
+ * GET /api/forecast?lat=26.46&lon=80.32
+ * or GET /api/forecast?city=Kanpur
+ */
+router.get('/forecast', async (req, res) => {
+  try {
+    const { city, lat, lon } = req.query;
+
+    if (lat !== undefined && lon !== undefined) {
+      const parsedLat = parseFloat(lat);
+      const parsedLon = parseFloat(lon);
+
+      if (isNaN(parsedLat) || isNaN(parsedLon) || parsedLat < -90 || parsedLat > 90 || parsedLon < -180 || parsedLon > 180) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid coordinates provided.',
+          code: 'INVALID_COORDINATES'
+        });
+      }
+
+      const forecastData = await weatherService.fetchForecast(parsedLat, parsedLon);
+      return res.status(200).json(forecastData);
+    }
+
+    if (city && typeof city === 'string' && city.trim().length > 0) {
+      const weatherData = await weatherService.fetchWeatherByCity(city.trim());
+      return res.status(200).json({
+        success: true,
+        city: weatherData.data.location.city,
+        country: weatherData.data.location.country,
+        timezoneOffset: weatherData.data.astronomy.timezoneOffset,
+        forecast: weatherData.data.forecast
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: 'Please provide either coordinates (lat and lon) or a city name.',
+      code: 'MISSING_PARAMETERS'
+    });
+  } catch (error) {
+    const statusCode = error.status || 500;
+    return res.status(statusCode).json({
+      success: false,
+      error: error.message || 'Unable to retrieve forecast data.',
+      code: error.code || 'FORECAST_ERROR'
     });
   }
 });

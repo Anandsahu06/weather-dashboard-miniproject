@@ -5,13 +5,15 @@
  * 1. Geocoding API (Direct): converts city query to coordinates and autocomplete suggestions.
  * 2. Geocoding API (Reverse): resolves coordinates to city, state, and country.
  * 3. Current Weather API: fetches real-time meteorological metrics.
+ * 4. 5-Day / 3-Hour Forecast API: retrieves upcoming forecast intervals and precipitation probability.
  * 
- * College Mini Project - Weather Dashboard
+ * College Mini Project - Weather Dashboard with Smart Recommendations
  */
 
 const OPENWEATHER_GEO_URL = 'https://api.openweathermap.org/geo/1.0/direct';
 const OPENWEATHER_REVERSE_GEO_URL = 'https://api.openweathermap.org/geo/1.0/reverse';
 const OPENWEATHER_DATA_URL = 'https://api.openweathermap.org/data/2.5/weather';
+const OPENWEATHER_FORECAST_URL = 'https://api.openweathermap.org/data/2.5/forecast';
 const REQUEST_TIMEOUT_MS = 8000;
 
 /**
@@ -98,12 +100,48 @@ async function fetchWithTimeout(url) {
 }
 
 /**
- * Normalizes OpenWeather response into a truthful, clean payload.
- * Note: Identical or inaccurate daily high/low temperatures from the instantaneous
- * weather endpoint are deliberately excluded to ensure data accuracy.
+ * Normalizes raw forecast list into the next 8 available forecast periods (24 hours).
+ * Formats time in the target city's local timezone.
  */
-function normalizeWeatherData(weatherData, locationOverride = {}) {
+function normalizeForecastList(rawList, timezoneOffset = 0) {
+  if (!Array.isArray(rawList)) return [];
+
+  // Take the next 8 periods (covering 24 hours at 3-hour increments)
+  return rawList.slice(0, 8).map(item => {
+    const primaryWeather = (item.weather && item.weather[0]) || {};
+    const shiftedDate = new Date((item.dt + timezoneOffset) * 1000);
+    let hours = shiftedDate.getUTCHours();
+    const minutes = String(shiftedDate.getUTCMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    const timeFormatted = `${hour12}:${minutes} ${ampm}`;
+
+    return {
+      timestamp: item.dt,
+      timeFormatted,
+      temp: Math.round(item.main?.temp || 0),
+      feels_like: Math.round(item.main?.feels_like || 0),
+      humidity: item.main?.humidity !== undefined ? item.main.humidity : null,
+      condition: primaryWeather.main || 'Clear',
+      description: primaryWeather.description || 'Clear sky',
+      icon: primaryWeather.icon || '01d',
+      iconUrl: `https://openweathermap.org/img/wn/${primaryWeather.icon || '01d'}@2x.png`,
+      pop: Math.round((item.pop || 0) * 100), // Probability of precipitation (0-100%)
+      rainMm: item.rain && item.rain['3h'] !== undefined ? Number(item.rain['3h'].toFixed(1)) : 0,
+      windSpeed: item.wind && item.wind.speed !== undefined
+        ? Math.round(item.wind.speed * 3.6 * 10) / 10
+        : null
+    };
+  });
+}
+
+/**
+ * Normalizes OpenWeather response into a truthful, clean payload.
+ */
+function normalizeWeatherData(weatherData, locationOverride = {}, rawForecast = null) {
   const primaryWeather = (weatherData.weather && weatherData.weather[0]) || {};
+  const tzOffset = weatherData.timezone !== undefined ? weatherData.timezone : 0;
+  const forecast = rawForecast ? normalizeForecastList(rawForecast.list, tzOffset) : [];
 
   return {
     success: true,
@@ -147,15 +185,16 @@ function normalizeWeatherData(weatherData, locationOverride = {}) {
       astronomy: {
         sunrise: weatherData.sys && weatherData.sys.sunrise ? weatherData.sys.sunrise : null,
         sunset: weatherData.sys && weatherData.sys.sunset ? weatherData.sys.sunset : null,
-        timezoneOffset: weatherData.timezone !== undefined ? weatherData.timezone : 0
+        timezoneOffset: tzOffset
       },
+      forecast,
       timestamp: Date.now()
     }
   };
 }
 
 /**
- * Fetches current weather for a city name.
+ * Fetches current weather and forecast for a city name.
  * @param {string} cityName - Name of the city to look up.
  * @returns {Promise<object>} Clean, formatted weather data.
  */
@@ -184,11 +223,15 @@ async function fetchWeatherByCity(cityName) {
     throw error;
   }
 
-  // 2. Current Weather API call using lat and lon
+  // 2. Fetch Current Weather and Forecast in parallel
   const weatherUrl = `${OPENWEATHER_DATA_URL}?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
-  const weatherData = await fetchWithTimeout(weatherUrl);
+  const forecastUrl = `${OPENWEATHER_FORECAST_URL}?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
 
-  // 3. Validate weather data
+  const [weatherData, forecastData] = await Promise.all([
+    fetchWithTimeout(weatherUrl),
+    fetchWithTimeout(forecastUrl).catch(() => null) // Gracefully fallback if forecast has issues
+  ]);
+
   if (!weatherData || !weatherData.main || !Array.isArray(weatherData.weather) || weatherData.weather.length === 0) {
     const error = new Error('Incomplete weather records received from OpenWeather API.');
     error.code = 'INCOMPLETE_DATA';
@@ -202,11 +245,11 @@ async function fetchWeatherByCity(cityName) {
     country: country || '',
     lat: Number(lat.toFixed(4)),
     lon: Number(lon.toFixed(4))
-  });
+  }, forecastData);
 }
 
 /**
- * Fetches current weather for geographic coordinates (Browser Geolocation).
+ * Fetches current weather and forecast for geographic coordinates (Browser Geolocation).
  * @param {number} lat - Latitude (-90 to 90).
  * @param {number} lon - Longitude (-180 to 180).
  * @returns {Promise<object>} Clean, formatted weather data.
@@ -214,9 +257,16 @@ async function fetchWeatherByCity(cityName) {
 async function fetchWeatherByCoordinates(lat, lon) {
   const apiKey = getApiKey();
 
-  // 1. Current Weather API call
   const weatherUrl = `${OPENWEATHER_DATA_URL}?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
-  const weatherData = await fetchWithTimeout(weatherUrl);
+  const reverseGeoUrl = `${OPENWEATHER_REVERSE_GEO_URL}?lat=${lat}&lon=${lon}&limit=1&appid=${apiKey}`;
+  const forecastUrl = `${OPENWEATHER_FORECAST_URL}?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
+
+  // Execute queries in parallel
+  const [weatherData, reverseData, forecastData] = await Promise.all([
+    fetchWithTimeout(weatherUrl),
+    fetchWithTimeout(reverseGeoUrl).catch(() => null),
+    fetchWithTimeout(forecastUrl).catch(() => null)
+  ]);
 
   if (!weatherData || !weatherData.main || !Array.isArray(weatherData.weather) || weatherData.weather.length === 0) {
     const error = new Error('Incomplete weather records received for coordinates.');
@@ -225,7 +275,6 @@ async function fetchWeatherByCoordinates(lat, lon) {
     throw error;
   }
 
-  // 2. Reverse Geocoding to get human-readable city, state, and country name
   let locationInfo = {
     city: weatherData.name || 'Current Location',
     state: null,
@@ -234,20 +283,32 @@ async function fetchWeatherByCoordinates(lat, lon) {
     lon: Number(lon.toFixed(4))
   };
 
-  try {
-    const reverseGeoUrl = `${OPENWEATHER_REVERSE_GEO_URL}?lat=${lat}&lon=${lon}&limit=1&appid=${apiKey}`;
-    const reverseData = await fetchWithTimeout(reverseGeoUrl);
-    if (Array.isArray(reverseData) && reverseData.length > 0) {
-      const bestMatch = reverseData[0];
-      locationInfo.city = bestMatch.name || locationInfo.city;
-      locationInfo.state = bestMatch.state || null;
-      locationInfo.country = bestMatch.country || locationInfo.country;
-    }
-  } catch (_) {
-    // If reverse geocoding fails, fallback gracefully to weatherData.name
+  if (Array.isArray(reverseData) && reverseData.length > 0) {
+    const bestMatch = reverseData[0];
+    locationInfo.city = bestMatch.name || locationInfo.city;
+    locationInfo.state = bestMatch.state || null;
+    locationInfo.country = bestMatch.country || locationInfo.country;
   }
 
-  return normalizeWeatherData(weatherData, locationInfo);
+  return normalizeWeatherData(weatherData, locationInfo, forecastData);
+}
+
+/**
+ * Standalone forecast fetcher for coordinates or city.
+ */
+async function fetchForecast(lat, lon) {
+  const apiKey = getApiKey();
+  const forecastUrl = `${OPENWEATHER_FORECAST_URL}?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
+  const forecastData = await fetchWithTimeout(forecastUrl);
+
+  const tzOffset = forecastData.city?.timezone || 0;
+  return {
+    success: true,
+    city: forecastData.city?.name || 'Unknown',
+    country: forecastData.city?.country || '',
+    timezoneOffset: tzOffset,
+    forecast: normalizeForecastList(forecastData.list, tzOffset)
+  };
 }
 
 /**
@@ -294,5 +355,6 @@ async function getCitySuggestions(query) {
 module.exports = {
   fetchWeatherByCity,
   fetchWeatherByCoordinates,
+  fetchForecast,
   getCitySuggestions
 };

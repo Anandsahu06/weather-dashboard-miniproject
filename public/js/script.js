@@ -5,11 +5,13 @@
  * - Smart City Autocomplete with debounced geocoding API queries
  * - Full keyboard accessibility (Arrow Up, Arrow Down, Enter, Escape)
  * - Real Current Location Weather using Browser Geolocation API
- * - Clean asynchronous client-server communication using Fetch API
- * - Local city time & astronomical day-length calculations
- * - Clean UI state transitions (Default, Loading, Results, Error Banners)
+ * - Rule-Based Weather Recommendations Engine
+ * - Weighted Weather Comfort Score (0-100) Algorithm
+ * - Hourly Weather Forecast (Next 24 hours at 3-hour intervals)
+ * - Smart Weather Alerts & Condition Notifications
+ * - "Plan Your Day" Outdoor Activity Scheduler
  * 
- * College Mini Project - Weather Dashboard
+ * College Mini Project - Location-Aware Weather Dashboard
  */
 
 (function () {
@@ -55,7 +57,24 @@
   const displayCondition = document.getElementById('displayCondition');
   const displayFeelsLikeHero = document.getElementById('displayFeelsLikeHero');
 
-  // 6 Metric Cards
+  // Weather Comfort Score Elements
+  const valComfortScore = document.getElementById('valComfortScore');
+  const comfortBadge = document.getElementById('comfortBadge');
+  const comfortTempFactor = document.getElementById('comfortTempFactor');
+  const comfortHumidFactor = document.getElementById('comfortHumidFactor');
+  const comfortWindFactor = document.getElementById('comfortWindFactor');
+  const comfortSummary = document.getElementById('comfortSummary');
+
+  // Smart Recommendations & Planner
+  const recommendationsList = document.getElementById('recommendationsList');
+  const plannerHeadline = document.getElementById('plannerHeadline');
+  const plannerAdvice = document.getElementById('plannerAdvice');
+  const weatherAlertsContainer = document.getElementById('weatherAlertsContainer');
+
+  // Hourly Forecast Timeline
+  const hourlyForecastTimeline = document.getElementById('hourlyForecastTimeline');
+
+  // 6 Metric Cells
   const valHumidity = document.getElementById('valHumidity');
   const humidityDescription = document.getElementById('humidityDescription');
 
@@ -124,7 +143,7 @@
   // ==========================================================================
 
   function bindEvents() {
-    // Search input typing
+    // Search input typing with autocomplete
     cityInput.addEventListener('input', handleInputChange);
 
     // Keyboard navigation in search input (ArrowUp, ArrowDown, Enter, Escape)
@@ -192,7 +211,6 @@
       return;
     }
 
-    // Debounce geocoding query by 300ms to avoid flooding the API
     clearTimeout(autocompleteDebounceTimer);
     autocompleteDebounceTimer = setTimeout(() => {
       fetchCitySuggestions(trimmed);
@@ -267,7 +285,6 @@
     clearInputBtn.classList.remove('hidden');
     closeAutocomplete();
 
-    // Directly fetch using precise latitude and longitude
     if (typeof item.lat === 'number' && typeof item.lon === 'number') {
       fetchWeatherByCoordinates(item.lat, item.lon);
     } else {
@@ -330,7 +347,6 @@
     closeAutocomplete();
     hideAlert();
 
-    // Verify browser Geolocation API support
     if (!('geolocation' in navigator)) {
       showAlert(
         'Geolocation Unsupported',
@@ -416,7 +432,7 @@
     }
     activeWeatherFetchController = new AbortController();
 
-    setLoadingState(true, 'Fetching live meteorological data...');
+    setLoadingState(true, 'Fetching live meteorological data & forecast...');
     hideAlert();
 
     try {
@@ -441,7 +457,6 @@
         return;
       }
 
-      // Render valid weather payload
       renderWeatherData(result.data);
 
     } catch (err) {
@@ -462,7 +477,7 @@
   // ==========================================================================
 
   function renderWeatherData(weather) {
-    const { location, temperature, condition, metrics, astronomy, timestamp } = weather;
+    const { location, temperature, condition, metrics, astronomy, forecast, timestamp } = weather;
 
     // Location
     displayCity.textContent = location.city;
@@ -493,7 +508,20 @@
     weatherIconImg.src = condition.iconUrl;
     weatherIconImg.alt = condition.description || 'Current weather condition';
 
-    // 1. Humidity
+    // 1. Weather Comfort Score (Feature 3)
+    renderComfortScore(temperature.current, metrics.humidity, metrics.windSpeed);
+
+    // 2. Smart Weather Recommendations (Feature 2)
+    renderRecommendations(weather, forecast);
+
+    // 3. Daily Planner & Smart Alerts (Features 5 & 6)
+    renderDailyPlanAndAlerts(weather, forecast);
+
+    // 4. Hourly Forecast Timeline (Feature 4)
+    renderHourlyForecast(forecast);
+
+    // 5. Atmospheric Metrics Grid
+    // Humidity
     if (metrics.humidity !== null) {
       valHumidity.textContent = metrics.humidity;
       humidityDescription.textContent = getHumidityDescription(metrics.humidity);
@@ -502,7 +530,7 @@
       humidityDescription.textContent = 'Not available';
     }
 
-    // 2. Wind Speed
+    // Wind Speed
     if (metrics.windSpeed !== null) {
       valWindSpeed.textContent = metrics.windSpeed;
       valWindMs.textContent = `${metrics.windSpeedMs} m/s`;
@@ -511,7 +539,7 @@
       valWindMs.textContent = '-- m/s';
     }
 
-    // 3. Pressure
+    // Pressure
     if (metrics.pressure !== null) {
       valPressure.textContent = metrics.pressure;
       pressureStatus.textContent = getPressureDescription(metrics.pressure);
@@ -520,7 +548,7 @@
       pressureStatus.textContent = 'Not available';
     }
 
-    // 4. Feels Like
+    // Feels Like
     valFeelsLike.textContent = temperature.feels_like;
     const diff = temperature.feels_like - temperature.current;
     if (diff === 0) {
@@ -531,7 +559,7 @@
       feelsLikeSummary.textContent = `${diff}°C cooler`;
     }
 
-    // 5. Visibility
+    // Visibility
     if (metrics.visibilityKm !== null) {
       valVisibility.textContent = metrics.visibilityKm;
       visibilityStatus.textContent = getVisibilityDescription(metrics.visibilityKm);
@@ -540,7 +568,7 @@
       visibilityStatus.textContent = 'Not available';
     }
 
-    // 6. Cloudiness
+    // Cloudiness
     if (metrics.cloudiness !== null) {
       valCloudiness.textContent = metrics.cloudiness;
       cloudsStatus.textContent = getCloudinessDescription(metrics.cloudiness);
@@ -577,7 +605,409 @@
   }
 
   // ==========================================================================
-  // 8. Helper Functions
+  // 8. Smart Feature Engines
+  // ==========================================================================
+
+  /**
+   * Feature 3: Weather Comfort Score Calculation (0-100)
+   * Formula: Comfort Score = (Temperature Score × 0.40) + (Humidity Score × 0.30) + (Wind Score × 0.30)
+   */
+  function calculateComfortScore(temp, humidity, windSpeedKmH) {
+    if (temp === null || humidity === null || windSpeedKmH === null ||
+        temp === undefined || humidity === undefined || windSpeedKmH === undefined) {
+      return null;
+    }
+
+    // 1. Temperature Score (40% Weight) - Ideal: 20°C - 25°C
+    let tempScore = 100;
+    if (temp < 20) {
+      tempScore = Math.max(0, 100 - (20 - temp) * 3.8);
+    } else if (temp > 25) {
+      tempScore = Math.max(0, 100 - (temp - 25) * 4.5);
+    }
+
+    // 2. Humidity Score (30% Weight) - Ideal: 40% - 55%
+    let humidScore = 100;
+    if (humidity < 40) {
+      humidScore = Math.max(0, 100 - (40 - humidity) * 2.8);
+    } else if (humidity > 55) {
+      humidScore = Math.max(0, 100 - (humidity - 55) * 2.2);
+    }
+
+    // 3. Wind Score (30% Weight) - Ideal: 0 - 12 km/h
+    let windScore = 100;
+    if (windSpeedKmH > 12) {
+      windScore = Math.max(0, 100 - (windSpeedKmH - 12) * 3.2);
+    }
+
+    const finalScore = Math.round((tempScore * 0.40) + (humidScore * 0.30) + (windScore * 0.30));
+    const score = Math.min(100, Math.max(0, finalScore));
+
+    let label = 'Moderate';
+    let tagClass = 'moderate';
+    let summary = 'Moderate atmospheric conditions for everyday activities.';
+
+    if (score >= 80) {
+      label = 'Very Comfortable';
+      tagClass = 'very-comfortable';
+      summary = 'Optimal temperature, gentle breeze, and comfortable humidity level.';
+    } else if (score >= 60) {
+      label = 'Comfortable';
+      tagClass = 'comfortable';
+      summary = 'Pleasant weather conditions suitable for outdoor routines and walks.';
+    } else if (score >= 40) {
+      label = 'Moderate';
+      tagClass = 'moderate';
+      summary = 'Acceptable outdoor comfort; consider temperature when dressing.';
+    } else if (score >= 20) {
+      label = 'Uncomfortable';
+      tagClass = 'uncomfortable';
+      summary = 'Elevated heat, high humidity, or brisk winds reduce outdoor comfort.';
+    } else {
+      label = 'Poor Conditions';
+      tagClass = 'poor';
+      summary = 'Adverse meteorological conditions; stay indoors if possible.';
+    }
+
+    return {
+      score,
+      label,
+      tagClass,
+      summary,
+      tempScore: Math.round(tempScore),
+      humidScore: Math.round(humidScore),
+      windScore: Math.round(windScore)
+    };
+  }
+
+  function renderComfortScore(temp, humidity, windSpeed) {
+    const result = calculateComfortScore(temp, humidity, windSpeed);
+
+    if (!result) {
+      valComfortScore.textContent = '--';
+      comfortBadge.className = 'comfort-tag';
+      comfortBadge.textContent = 'Unavailable';
+      comfortTempFactor.textContent = '--';
+      comfortHumidFactor.textContent = '--';
+      comfortWindFactor.textContent = '--';
+      comfortSummary.textContent = 'Insufficient meteorological metrics to calculate comfort index.';
+      return;
+    }
+
+    valComfortScore.textContent = result.score;
+    comfortBadge.className = `comfort-tag ${result.tagClass}`;
+    comfortBadge.textContent = result.label;
+    comfortTempFactor.textContent = `${result.tempScore}%`;
+    comfortHumidFactor.textContent = `${result.humidScore}%`;
+    comfortWindFactor.textContent = `${result.windScore}%`;
+    comfortSummary.textContent = result.summary;
+  }
+
+  /**
+   * Feature 2: Rule-Based Weather Recommendations Engine
+   */
+  function generateSmartRecommendations(currentWeather, forecastList) {
+    const recs = [];
+    const temp = currentWeather.temperature?.current;
+    const feels = currentWeather.temperature?.feels_like;
+    const wind = currentWeather.metrics?.windSpeed;
+    const visibility = currentWeather.metrics?.visibilityKm;
+    const condition = currentWeather.condition?.main?.toLowerCase() || '';
+
+    // Analyze upcoming precipitation in forecast
+    let maxPop = 0;
+    let rainTime = '';
+    let hasUpcomingRain = false;
+    let isHeavyRain = false;
+
+    if (Array.isArray(forecastList)) {
+      for (const slot of forecastList) {
+        if (slot.pop > maxPop) {
+          maxPop = slot.pop;
+          rainTime = slot.timeFormatted;
+        }
+        if (slot.pop >= 40 || slot.condition.toLowerCase().includes('rain')) {
+          hasUpcomingRain = true;
+        }
+        if (slot.rainMm >= 4 || slot.description.toLowerCase().includes('heavy') || slot.condition === 'Thunderstorm') {
+          isHeavyRain = true;
+        }
+      }
+    }
+
+    // Rule 1: Active or Upcoming Rain
+    if (condition.includes('rain') || condition.includes('drizzle')) {
+      recs.push({
+        title: 'Carry an umbrella before heading outside.',
+        reason: 'Active rainfall or drizzle currently detected in the area.'
+      });
+    } else if (hasUpcomingRain && maxPop >= 40) {
+      recs.push({
+        title: 'Keep an umbrella or raincoat handy today.',
+        reason: `Upcoming rain probability reaches ${maxPop}% around ${rainTime}.`
+      });
+    }
+
+    // Rule 2: Heavy Rainfall or Thunderstorm
+    if (isHeavyRain || condition === 'thunderstorm') {
+      recs.push({
+        title: 'Heavy rain or storm may impact outdoor plans.',
+        reason: 'Significant precipitation or storm activity identified in upcoming intervals.'
+      });
+    }
+
+    // Rule 3: High Temperature & Heat
+    if (temp !== undefined && temp >= 34) {
+      recs.push({
+        title: 'Stay well-hydrated and avoid prolonged direct sun.',
+        reason: `High heat index with ambient temperature at ${temp}°C (feels like ${feels}°C).`
+      });
+    }
+
+    // Rule 4: Low Temperature & Cold
+    if (temp !== undefined && temp <= 12) {
+      recs.push({
+        title: 'Consider wearing warm layered clothing.',
+        reason: `Chilly ambient conditions with current temperature at ${temp}°C.`
+      });
+    } else if (temp !== undefined && temp <= 4) {
+      recs.push({
+        title: 'Risk of frost; dress in heavy thermal wear.',
+        reason: `Near-freezing temperatures currently at ${temp}°C.`
+      });
+    }
+
+    // Rule 5: High Wind Speed
+    if (wind !== null && wind >= 28) {
+      recs.push({
+        title: 'Strong winds may make outdoor activities uncomfortable.',
+        reason: `Surface gusts reaching ${wind} km/h.`
+      });
+    }
+
+    // Rule 6: Poor Visibility / Fog
+    if (visibility !== null && visibility <= 2.5) {
+      recs.push({
+        title: 'Drive carefully and maintain safe braking distance.',
+        reason: `Horizontal visibility reduced to ${visibility} km due to haze/fog.`
+      });
+    }
+
+    // Baseline: Comfortable Weather
+    if (recs.length === 0) {
+      recs.push({
+        title: 'Weather conditions look suitable for outdoor activities.',
+        reason: `Mild temperature (${temp}°C), calm winds, and 0% rain probability predicted.`
+      });
+    }
+
+    return recs.slice(0, 3);
+  }
+
+  function renderRecommendations(weather, forecast) {
+    const recs = generateSmartRecommendations(weather, forecast);
+    recommendationsList.innerHTML = '';
+
+    recs.forEach(rec => {
+      const li = document.createElement('li');
+      li.className = 'rec-item';
+
+      li.innerHTML = `
+        <div class="rec-header">
+          <svg class="rec-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span class="rec-text">${escapeHtml(rec.title)}</span>
+        </div>
+        <p class="rec-reason"><strong>Reason:</strong> ${escapeHtml(rec.reason)}</p>
+      `;
+
+      recommendationsList.appendChild(li);
+    });
+  }
+
+  /**
+   * Features 5 & 6: Daily Planner & Weather Condition Notifications
+   */
+  function renderDailyPlanAndAlerts(weather, forecast) {
+    // 1. Plan Your Day
+    const plan = generateDailyPlan(weather, forecast);
+    plannerHeadline.textContent = plan.headline;
+    plannerAdvice.textContent = plan.advice;
+
+    // 2. Weather Alerts
+    const alerts = generateSmartAlerts(weather, forecast);
+    weatherAlertsContainer.innerHTML = '';
+
+    if (alerts.length === 0) {
+      const stableAlert = document.createElement('div');
+      stableAlert.className = 'alert-item severity-low';
+      stableAlert.innerHTML = `
+        <div class="alert-item-header">
+          <span class="alert-item-title">Stable Conditions</span>
+          <span class="alert-badge">Notice</span>
+        </div>
+        <p class="alert-item-reason">No adverse weather alerts identified. Atmospheric readings remain normal.</p>
+      `;
+      weatherAlertsContainer.appendChild(stableAlert);
+    } else {
+      alerts.forEach(alt => {
+        const div = document.createElement('div');
+        div.className = `alert-item severity-${alt.severity}`;
+        div.innerHTML = `
+          <div class="alert-item-header">
+            <span class="alert-item-title">${escapeHtml(alt.title)}</span>
+            <span class="alert-badge">${escapeHtml(alt.severity)}</span>
+          </div>
+          <p class="alert-item-reason">${escapeHtml(alt.reason)}</p>
+        `;
+        weatherAlertsContainer.appendChild(div);
+      });
+    }
+  }
+
+  function generateDailyPlan(currentWeather, forecastList) {
+    if (!Array.isArray(forecastList) || forecastList.length === 0) {
+      return {
+        headline: 'Outdoor Planning Guidance',
+        advice: 'Current conditions are stable. Check periodic updates before scheduling long outdoor activities.'
+      };
+    }
+
+    // Find the most optimal slot for outdoor activities
+    let bestSlot = null;
+    let bestScore = -Infinity;
+
+    forecastList.forEach(slot => {
+      let score = 100;
+      score -= (slot.pop || 0) * 0.8; // Heavy penalty for rain
+      score -= Math.abs((slot.temp || 22) - 22) * 3; // Penalty for extreme deviation from 22°C
+      if (slot.windSpeed > 20) score -= (slot.windSpeed - 20) * 2;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestSlot = slot;
+      }
+    });
+
+    if (bestSlot) {
+      const rainContext = bestSlot.pop > 0 ? `(${bestSlot.pop}% rain chance)` : '(0% rain chance)';
+      return {
+        headline: `Best outdoor window: ${bestSlot.timeFormatted} (${bestSlot.temp}°C, ${bestSlot.condition})`,
+        advice: `Atmospheric metrics around ${bestSlot.timeFormatted} look most favorable with ${bestSlot.description} and ${rainContext}.`
+      };
+    }
+
+    return {
+      headline: 'Plan Your Day',
+      advice: 'Meteorological conditions appear uniform across upcoming forecast hours.'
+    };
+  }
+
+  function generateSmartAlerts(currentWeather, forecastList) {
+    const alerts = [];
+    const temp = currentWeather.temperature?.current;
+    const wind = currentWeather.metrics?.windSpeed;
+    const visibility = currentWeather.metrics?.visibilityKm;
+    const mainCond = currentWeather.condition?.main || '';
+
+    // Severe: Thunderstorm
+    if (mainCond === 'Thunderstorm') {
+      alerts.push({
+        title: 'Thunderstorm Advisory',
+        severity: 'high',
+        reason: 'Active lightning and electrical storm recorded in the area.'
+      });
+    }
+
+    // Severe: Extreme Heat
+    if (temp !== undefined && temp >= 40) {
+      alerts.push({
+        title: 'Excessive Heat Advisory',
+        severity: 'high',
+        reason: `Temperatures exceed 40°C (${temp}°C). Heat exhaustion risk for outdoor workers.`
+      });
+    }
+
+    // Moderate: Heavy Rain Forecast
+    let maxPop = 0;
+    let rainTime = '';
+    if (Array.isArray(forecastList)) {
+      forecastList.forEach(slot => {
+        if (slot.pop > maxPop) {
+          maxPop = slot.pop;
+          rainTime = slot.timeFormatted;
+        }
+      });
+    }
+
+    if (maxPop >= 70) {
+      alerts.push({
+        title: 'Heavy Rain Watch',
+        severity: 'moderate',
+        reason: `High rain chance (${maxPop}%) forecast around ${rainTime}.`
+      });
+    } else if (maxPop >= 40) {
+      alerts.push({
+        title: 'Precipitation Notice',
+        severity: 'low',
+        reason: `${maxPop}% probability of precipitation around ${rainTime}.`
+      });
+    }
+
+    // Moderate: High Wind
+    if (wind !== null && wind >= 35) {
+      alerts.push({
+        title: 'High Wind Notification',
+        severity: 'moderate',
+        reason: `Strong winds exceeding 35 km/h (${wind} km/h).`
+      });
+    }
+
+    // Moderate: Dense Fog
+    if (visibility !== null && visibility <= 1.5) {
+      alerts.push({
+        title: 'Reduced Visibility Warning',
+        severity: 'moderate',
+        reason: `Dense fog/haze reducing horizontal visibility below 1.5 km (${visibility} km).`
+      });
+    }
+
+    return alerts.slice(0, 2);
+  }
+
+  /**
+   * Feature 4: Hourly Weather Forecast Timeline (Next 24 Hours)
+   */
+  function renderHourlyForecast(forecastList) {
+    hourlyForecastTimeline.innerHTML = '';
+
+    if (!Array.isArray(forecastList) || forecastList.length === 0) {
+      hourlyForecastTimeline.innerHTML = '<p class="forecast-subtitle" style="padding: 1rem;">Hourly forecast data is currently unavailable.</p>';
+      return;
+    }
+
+    forecastList.forEach((slot, index) => {
+      const card = document.createElement('div');
+      card.className = `hourly-card ${index === 0 ? 'active-slot' : ''}`;
+
+      const popDisplay = slot.pop > 0 
+        ? `<span class="hourly-pop">💧 ${slot.pop}%</span>` 
+        : '<span class="hourly-pop" style="opacity: 0.6;">0%</span>';
+
+      card.innerHTML = `
+        <span class="hourly-time">${escapeHtml(slot.timeFormatted)}</span>
+        <img class="hourly-icon" src="${escapeHtml(slot.iconUrl)}" alt="${escapeHtml(slot.description)}" onerror="this.src='assets/favicon.svg'"/>
+        <span class="hourly-temp">${slot.temp}°C</span>
+        ${popDisplay}
+      `;
+
+      hourlyForecastTimeline.appendChild(card);
+    });
+  }
+
+  // ==========================================================================
+  // 9. Helper Functions
   // ==========================================================================
 
   function calculateLocalTimeString(unixSec, offsetSec) {
@@ -618,8 +1048,18 @@
     return 'Overcast sky';
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // View State Management
-  function setLoadingState(isLoading, message = 'Fetching live weather data...') {
+  function setLoadingState(isLoading, message = 'Fetching live meteorological data...') {
     if (isLoading) {
       loadingMessage.textContent = message;
       loadingState.classList.remove('hidden');
