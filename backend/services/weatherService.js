@@ -2,18 +2,20 @@
  * Weather Service
  * 
  * Handles all external interactions with the OpenWeather API:
- * 1. Geocoding API (Direct): converts city name to lat & lon coordinates.
- * 2. Current Weather API: fetches real-time meteorological metrics for the coordinates.
+ * 1. Geocoding API (Direct): converts city query to coordinates and autocomplete suggestions.
+ * 2. Geocoding API (Reverse): resolves coordinates to city, state, and country.
+ * 3. Current Weather API: fetches real-time meteorological metrics.
  * 
  * College Mini Project - Weather Dashboard
  */
 
 const OPENWEATHER_GEO_URL = 'https://api.openweathermap.org/geo/1.0/direct';
+const OPENWEATHER_REVERSE_GEO_URL = 'https://api.openweathermap.org/geo/1.0/reverse';
 const OPENWEATHER_DATA_URL = 'https://api.openweathermap.org/data/2.5/weather';
 const REQUEST_TIMEOUT_MS = 8000;
 
 /**
- * Validates whether the API key is configured and not a placeholder.
+ * Validates whether the API key is configured.
  * @returns {string} The active OpenWeather API key.
  */
 function getApiKey() {
@@ -30,7 +32,7 @@ function getApiKey() {
 }
 
 /**
- * Fetches data with timeout and error mapping.
+ * Helper to fetch with timeout and standard error mapping.
  * @param {string} url - API URL to call.
  * @returns {Promise<any>} Parsed JSON response.
  */
@@ -96,12 +98,64 @@ async function fetchWithTimeout(url) {
 }
 
 /**
+ * Normalizes OpenWeather response into a truthful, clean payload.
+ * Note: Identical or inaccurate daily high/low temperatures from the instantaneous
+ * weather endpoint are deliberately excluded to ensure data accuracy.
+ */
+function normalizeWeatherData(weatherData, locationOverride = {}) {
+  const primaryWeather = (weatherData.weather && weatherData.weather[0]) || {};
+
+  return {
+    success: true,
+    data: {
+      location: {
+        city: locationOverride.city || weatherData.name || 'Unknown Location',
+        country: locationOverride.country || (weatherData.sys && weatherData.sys.country) || '',
+        state: locationOverride.state || null,
+        coordinates: {
+          latitude: locationOverride.lat !== undefined ? locationOverride.lat : Number((weatherData.coord?.lat || 0).toFixed(4)),
+          longitude: locationOverride.lon !== undefined ? locationOverride.lon : Number((weatherData.coord?.lon || 0).toFixed(4))
+        }
+      },
+      temperature: {
+        current: Math.round(weatherData.main?.temp || 0),
+        feels_like: Math.round(weatherData.main?.feels_like || 0),
+        unit: '°C'
+      },
+      condition: {
+        main: primaryWeather.main || 'Clear',
+        description: primaryWeather.description || 'Clear sky',
+        icon: primaryWeather.icon || '01d',
+        iconUrl: `https://openweathermap.org/img/wn/${primaryWeather.icon || '01d'}@2x.png`
+      },
+      metrics: {
+        humidity: weatherData.main?.humidity !== undefined ? weatherData.main.humidity : null,
+        humidityUnit: '%',
+        windSpeed: weatherData.wind && weatherData.wind.speed !== undefined 
+          ? Math.round(weatherData.wind.speed * 3.6 * 10) / 10 
+          : null, // Converted accurately from m/s to km/h
+        windSpeedMs: weatherData.wind && weatherData.wind.speed !== undefined ? weatherData.wind.speed : null,
+        windUnit: 'km/h',
+        pressure: weatherData.main?.pressure !== undefined ? weatherData.main.pressure : null,
+        pressureUnit: 'hPa',
+        visibilityKm: weatherData.visibility !== undefined 
+          ? Number((weatherData.visibility / 1000).toFixed(1)) 
+          : null,
+        cloudiness: weatherData.clouds && weatherData.clouds.all !== undefined ? weatherData.clouds.all : null,
+        cloudinessUnit: '%'
+      },
+      astronomy: {
+        sunrise: weatherData.sys && weatherData.sys.sunrise ? weatherData.sys.sunrise : null,
+        sunset: weatherData.sys && weatherData.sys.sunset ? weatherData.sys.sunset : null,
+        timezoneOffset: weatherData.timezone !== undefined ? weatherData.timezone : 0
+      },
+      timestamp: Date.now()
+    }
+  };
+}
+
+/**
  * Fetches current weather for a city name.
- * 
- * Step 1: Geocode city name to lat & lon.
- * Step 2: Fetch current weather for coordinates.
- * Step 3: Format and validate returned payload.
- * 
  * @param {string} cityName - Name of the city to look up.
  * @returns {Promise<object>} Clean, formatted weather data.
  */
@@ -142,60 +196,103 @@ async function fetchWeatherByCity(cityName) {
     throw error;
   }
 
-  const primaryWeather = weatherData.weather[0];
+  return normalizeWeatherData(weatherData, {
+    city: name || trimmedCity,
+    state: state || null,
+    country: country || '',
+    lat: Number(lat.toFixed(4)),
+    lon: Number(lon.toFixed(4))
+  });
+}
 
-  // 4. Return clean, normalized payload
-  return {
-    success: true,
-    data: {
-      location: {
-        city: name || trimmedCity,
-        country: country || (weatherData.sys && weatherData.sys.country) || '',
-        state: state || null,
-        coordinates: {
-          latitude: Number(lat.toFixed(4)),
-          longitude: Number(lon.toFixed(4))
-        }
-      },
-      temperature: {
-        current: Math.round(weatherData.main.temp),
-        feels_like: Math.round(weatherData.main.feels_like),
-        temp_min: weatherData.main.temp_min !== undefined ? Math.round(weatherData.main.temp_min) : null,
-        temp_max: weatherData.main.temp_max !== undefined ? Math.round(weatherData.main.temp_max) : null,
-        unit: '°C'
-      },
-      condition: {
-        main: primaryWeather.main || 'Clear',
-        description: primaryWeather.description || 'Clear skies',
-        icon: primaryWeather.icon || '01d',
-        iconUrl: `https://openweathermap.org/img/wn/${primaryWeather.icon || '01d'}@2x.png`
-      },
-      metrics: {
-        humidity: weatherData.main.humidity !== undefined ? weatherData.main.humidity : null,
-        humidityUnit: '%',
-        windSpeed: weatherData.wind && weatherData.wind.speed !== undefined 
-          ? Math.round(weatherData.wind.speed * 3.6 * 10) / 10 
-          : null, // Converted to km/h for standard readability
-        windSpeedMs: weatherData.wind && weatherData.wind.speed !== undefined ? weatherData.wind.speed : null,
-        windUnit: 'km/h',
-        pressure: weatherData.main.pressure !== undefined ? weatherData.main.pressure : null,
-        pressureUnit: 'hPa',
-        visibilityKm: weatherData.visibility !== undefined 
-          ? Number((weatherData.visibility / 1000).toFixed(1)) 
-          : null,
-        cloudiness: weatherData.clouds && weatherData.clouds.all !== undefined ? weatherData.clouds.all : null,
-        cloudinessUnit: '%'
-      },
-      astronomy: {
-        sunrise: weatherData.sys && weatherData.sys.sunrise ? weatherData.sys.sunrise : null,
-        sunset: weatherData.sys && weatherData.sys.sunset ? weatherData.sys.sunset : null,
-        timezoneOffset: weatherData.timezone !== undefined ? weatherData.timezone : 0
-      },
-      timestamp: Date.now()
-    }
+/**
+ * Fetches current weather for geographic coordinates (Browser Geolocation).
+ * @param {number} lat - Latitude (-90 to 90).
+ * @param {number} lon - Longitude (-180 to 180).
+ * @returns {Promise<object>} Clean, formatted weather data.
+ */
+async function fetchWeatherByCoordinates(lat, lon) {
+  const apiKey = getApiKey();
+
+  // 1. Current Weather API call
+  const weatherUrl = `${OPENWEATHER_DATA_URL}?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
+  const weatherData = await fetchWithTimeout(weatherUrl);
+
+  if (!weatherData || !weatherData.main || !Array.isArray(weatherData.weather) || weatherData.weather.length === 0) {
+    const error = new Error('Incomplete weather records received for coordinates.');
+    error.code = 'INCOMPLETE_DATA';
+    error.status = 502;
+    throw error;
+  }
+
+  // 2. Reverse Geocoding to get human-readable city, state, and country name
+  let locationInfo = {
+    city: weatherData.name || 'Current Location',
+    state: null,
+    country: (weatherData.sys && weatherData.sys.country) || '',
+    lat: Number(lat.toFixed(4)),
+    lon: Number(lon.toFixed(4))
   };
+
+  try {
+    const reverseGeoUrl = `${OPENWEATHER_REVERSE_GEO_URL}?lat=${lat}&lon=${lon}&limit=1&appid=${apiKey}`;
+    const reverseData = await fetchWithTimeout(reverseGeoUrl);
+    if (Array.isArray(reverseData) && reverseData.length > 0) {
+      const bestMatch = reverseData[0];
+      locationInfo.city = bestMatch.name || locationInfo.city;
+      locationInfo.state = bestMatch.state || null;
+      locationInfo.country = bestMatch.country || locationInfo.country;
+    }
+  } catch (_) {
+    // If reverse geocoding fails, fallback gracefully to weatherData.name
+  }
+
+  return normalizeWeatherData(weatherData, locationInfo);
+}
+
+/**
+ * Fetches dynamic city autocomplete suggestions using OpenWeather Geocoding API.
+ * @param {string} query - Typed prefix/search term.
+ * @returns {Promise<Array<object>>} Matching city suggestions.
+ */
+async function getCitySuggestions(query) {
+  const apiKey = getApiKey();
+  const trimmed = query.trim();
+
+  if (!trimmed || trimmed.length < 1) {
+    return [];
+  }
+
+  const geoUrl = `${OPENWEATHER_GEO_URL}?q=${encodeURIComponent(trimmed)}&limit=5&appid=${apiKey}`;
+  const results = await fetchWithTimeout(geoUrl);
+
+  if (!Array.isArray(results)) {
+    return [];
+  }
+
+  // Deduplicate and format suggestions
+  const seen = new Set();
+  const suggestions = [];
+
+  for (const item of results) {
+    const label = `${item.name}-${item.state || ''}-${item.country}`;
+    if (!seen.has(label)) {
+      seen.add(label);
+      suggestions.push({
+        name: item.name,
+        state: item.state || null,
+        country: item.country,
+        lat: Number(item.lat.toFixed(4)),
+        lon: Number(item.lon.toFixed(4))
+      });
+    }
+  }
+
+  return suggestions;
 }
 
 module.exports = {
-  fetchWeatherByCity
+  fetchWeatherByCity,
+  fetchWeatherByCoordinates,
+  getCitySuggestions
 };

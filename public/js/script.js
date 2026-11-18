@@ -1,13 +1,13 @@
 /**
  * Weather Dashboard - Client-Side JavaScript
  * 
- * Demonstrates:
- * - DOM manipulation & event handling
- * - Fetch API integration with backend REST endpoints
- * - Asynchronous JavaScript (Async/Await)
- * - Safe data binding (preventing XSS)
- * - Timezone conversions for city astronomical data
- * - Responsive UI state transitions (Default, Loading, Results, Errors)
+ * Features:
+ * - Smart City Autocomplete with debounced geocoding API queries
+ * - Full keyboard accessibility (Arrow Up, Arrow Down, Enter, Escape)
+ * - Real Current Location Weather using Browser Geolocation API
+ * - Clean asynchronous client-server communication using Fetch API
+ * - Local city time & astronomical day-length calculations
+ * - Clean UI state transitions (Default, Loading, Results, Error Banners)
  * 
  * College Mini Project - Weather Dashboard
  */
@@ -19,16 +19,18 @@
   // 1. DOM Element References
   // ==========================================================================
 
-  // Forms and Search Controls
-  const searchForm = document.getElementById('weatherSearchForm');
+  // Search Controls
   const cityInput = document.getElementById('cityInput');
   const clearInputBtn = document.getElementById('clearInputBtn');
   const searchBtn = document.getElementById('searchBtn');
+  const locationBtn = document.getElementById('locationBtn');
+  const autocompleteList = document.getElementById('autocompleteList');
   const quickCitiesContainer = document.getElementById('quickCities');
 
-  // UI View States
+  // UI View Panels
   const defaultState = document.getElementById('defaultState');
   const loadingState = document.getElementById('loadingState');
+  const loadingMessage = document.getElementById('loadingMessage');
   const weatherResults = document.getElementById('weatherResults');
 
   // Alert Banner
@@ -38,26 +40,23 @@
   const closeAlertBtn = document.getElementById('closeAlertBtn');
 
   // Header Elements
-  const apiStatusText = document.getElementById('apiStatusText');
-  const apiStatusChip = document.getElementById('apiStatusChip');
+  const serverStatus = document.getElementById('serverStatus');
+  const serverStatusText = document.getElementById('serverStatusText');
   const currentDateDisplay = document.getElementById('currentDateDisplay');
 
-  // Hero Card Elements
+  // Main Weather Hero Elements
   const displayCity = document.getElementById('displayCity');
   const displayCountry = document.getElementById('displayCountry');
   const displayCoordinates = document.getElementById('displayCoordinates');
   const displayLocalTime = document.getElementById('displayLocalTime');
   const displayLastUpdated = document.getElementById('displayLastUpdated');
   const displayTemp = document.getElementById('displayTemp');
-  const displayFeelsLikeHero = document.getElementById('displayFeelsLikeHero');
-  const valHigh = document.getElementById('valHigh');
-  const valLow = document.getElementById('valLow');
   const weatherIconImg = document.getElementById('weatherIconImg');
   const displayCondition = document.getElementById('displayCondition');
+  const displayFeelsLikeHero = document.getElementById('displayFeelsLikeHero');
 
-  // 6 Metric Cards Elements
+  // 6 Metric Cards
   const valHumidity = document.getElementById('valHumidity');
-  const humidityBar = document.getElementById('humidityBar');
   const humidityDescription = document.getElementById('humidityDescription');
 
   const valWindSpeed = document.getElementById('valWindSpeed');
@@ -73,7 +72,6 @@
   const visibilityStatus = document.getElementById('visibilityStatus');
 
   const valCloudiness = document.getElementById('valCloudiness');
-  const cloudinessBar = document.getElementById('cloudinessBar');
   const cloudsStatus = document.getElementById('cloudsStatus');
 
   // Solar Schedule Elements
@@ -81,193 +79,397 @@
   const valSunset = document.getElementById('valSunset');
   const valDayLength = document.getElementById('valDayLength');
 
-  // State variable to avoid duplicate concurrent calls
-  let activeAbortController = null;
-  let isFetching = false;
+  // Runtime State
+  let autocompleteDebounceTimer = null;
+  let activeAutocompleteController = null;
+  let activeWeatherFetchController = null;
+  let currentActiveIndex = -1;
+  let currentSuggestions = [];
 
   // ==========================================================================
-  // 2. Initialization & Setup
+  // 2. Initialization
   // ==========================================================================
 
   document.addEventListener('DOMContentLoaded', () => {
-    initCurrentDate();
+    initDateDisplay();
     checkServerHealth();
     bindEvents();
-
-    // Check if user previously looked up a city in current session
-    const lastCity = sessionStorage.getItem('weather_last_searched');
-    if (lastCity) {
-      cityInput.value = lastCity;
-      clearInputBtn.classList.remove('hidden');
-    }
   });
 
-  /**
-   * Formats and sets today's date in header.
-   */
-  function initCurrentDate() {
+  function initDateDisplay() {
     const now = new Date();
     const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
     currentDateDisplay.textContent = now.toLocaleDateString('en-US', options);
   }
 
-  /**
-   * Performs initial health ping to verify server connectivity.
-   */
   async function checkServerHealth() {
-    const statusDot = apiStatusChip.querySelector('.status-dot');
+    const dot = serverStatus.querySelector('.status-dot');
     try {
       const response = await fetch('/api/health');
       if (response.ok) {
-        statusDot.className = 'status-dot online';
-        apiStatusText.textContent = 'Server Online';
+        dot.className = 'status-dot online';
+        serverStatusText.textContent = 'Online';
       } else {
-        statusDot.className = 'status-dot error';
-        apiStatusText.textContent = 'API Error';
+        dot.className = 'status-dot error';
+        serverStatusText.textContent = 'API Error';
       }
     } catch (_) {
-      statusDot.className = 'status-dot error';
-      apiStatusText.textContent = 'Server Offline';
+      dot.className = 'status-dot error';
+      serverStatusText.textContent = 'Offline';
     }
   }
 
   // ==========================================================================
-  // 3. Event Listeners
+  // 3. Event Listeners & Binding
   // ==========================================================================
 
   function bindEvents() {
-    // Form submit
-    searchForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      executeSearch();
-    });
+    // Search input typing
+    cityInput.addEventListener('input', handleInputChange);
 
-    // Input changes (show/hide clear button)
-    cityInput.addEventListener('input', () => {
-      if (cityInput.value.trim().length > 0) {
-        clearInputBtn.classList.remove('hidden');
-      } else {
-        clearInputBtn.classList.add('hidden');
-      }
+    // Keyboard navigation in search input (ArrowUp, ArrowDown, Enter, Escape)
+    cityInput.addEventListener('keydown', handleInputKeyDown);
+
+    // Search button click
+    searchBtn.addEventListener('click', () => {
+      closeAutocomplete();
+      executeCitySearch(cityInput.value);
     });
 
     // Clear input button
     clearInputBtn.addEventListener('click', () => {
       cityInput.value = '';
       clearInputBtn.classList.add('hidden');
+      closeAutocomplete();
       cityInput.focus();
     });
 
-    // Close alert banner button
-    closeAlertBtn.addEventListener('click', () => {
-      hideAlert();
-    });
+    // Use My Location button
+    locationBtn.addEventListener('click', handleCurrentLocationRequest);
 
     // Quick select city chips
     if (quickCitiesContainer) {
       quickCitiesContainer.addEventListener('click', (e) => {
-        const chip = e.target.closest('.city-chip');
+        const chip = e.target.closest('.quick-chip');
         if (chip && chip.dataset.city) {
           cityInput.value = chip.dataset.city;
           clearInputBtn.classList.remove('hidden');
-          executeSearch();
+          closeAutocomplete();
+          executeCitySearch(chip.dataset.city);
         }
       });
     }
 
-    // Weather icon fallback handler
+    // Dismiss alert button
+    closeAlertBtn.addEventListener('click', hideAlert);
+
+    // Close autocomplete when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-field-container')) {
+        closeAutocomplete();
+      }
+    });
+
+    // Weather icon fallback
     weatherIconImg.addEventListener('error', () => {
       weatherIconImg.src = 'assets/favicon.svg';
     });
   }
 
   // ==========================================================================
-  // 4. Core Search Execution
+  // 4. Smart City Autocomplete Search
   // ==========================================================================
 
-  async function executeSearch() {
-    const rawCity = cityInput.value;
-    const trimmedCity = rawCity.trim();
+  function handleInputChange() {
+    const rawVal = cityInput.value;
+    const trimmed = rawVal.trim();
 
-    // 1. Validate empty submission
-    if (!trimmedCity) {
-      showAlert('Empty Search', 'Please enter a city name to search (e.g., London, Tokyo, Delhi).');
+    if (trimmed.length > 0) {
+      clearInputBtn.classList.remove('hidden');
+    } else {
+      clearInputBtn.classList.add('hidden');
+      closeAutocomplete();
+      return;
+    }
+
+    // Debounce geocoding query by 300ms to avoid flooding the API
+    clearTimeout(autocompleteDebounceTimer);
+    autocompleteDebounceTimer = setTimeout(() => {
+      fetchCitySuggestions(trimmed);
+    }, 300);
+  }
+
+  async function fetchCitySuggestions(query) {
+    if (activeAutocompleteController) {
+      activeAutocompleteController.abort();
+    }
+    activeAutocompleteController = new AbortController();
+
+    try {
+      const response = await fetch(`/api/suggestions?q=${encodeURIComponent(query)}`, {
+        signal: activeAutocompleteController.signal
+      });
+
+      if (!response.ok) {
+        closeAutocomplete();
+        return;
+      }
+
+      const result = await response.json();
+      if (result.success && Array.isArray(result.suggestions) && result.suggestions.length > 0) {
+        currentSuggestions = result.suggestions;
+        renderAutocompleteList(result.suggestions);
+      } else {
+        closeAutocomplete();
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        closeAutocomplete();
+      }
+    }
+  }
+
+  function renderAutocompleteList(suggestions) {
+    autocompleteList.innerHTML = '';
+    currentActiveIndex = -1;
+
+    suggestions.forEach((item, index) => {
+      const li = document.createElement('li');
+      li.className = 'autocomplete-item';
+      li.setAttribute('role', 'option');
+      li.setAttribute('data-index', index);
+
+      const cityNameSpan = document.createElement('span');
+      cityNameSpan.className = 'autocomplete-city-name';
+      cityNameSpan.textContent = item.name;
+
+      const regionSpan = document.createElement('span');
+      regionSpan.className = 'autocomplete-region';
+      const parts = [item.state, item.country].filter(Boolean);
+      regionSpan.textContent = parts.length > 0 ? `(${parts.join(', ')})` : '';
+
+      li.appendChild(cityNameSpan);
+      li.appendChild(regionSpan);
+
+      li.addEventListener('click', () => {
+        selectSuggestion(item);
+      });
+
+      autocompleteList.appendChild(li);
+    });
+
+    autocompleteList.classList.remove('hidden');
+  }
+
+  function selectSuggestion(item) {
+    const displayName = item.name + (item.country ? `, ${item.country}` : '');
+    cityInput.value = displayName;
+    clearInputBtn.classList.remove('hidden');
+    closeAutocomplete();
+
+    // Directly fetch using precise latitude and longitude
+    if (typeof item.lat === 'number' && typeof item.lon === 'number') {
+      fetchWeatherByCoordinates(item.lat, item.lon);
+    } else {
+      executeCitySearch(item.name);
+    }
+  }
+
+  function handleInputKeyDown(e) {
+    const isDropdownVisible = !autocompleteList.classList.contains('hidden');
+
+    if (e.key === 'ArrowDown') {
+      if (isDropdownVisible && currentSuggestions.length > 0) {
+        e.preventDefault();
+        currentActiveIndex = (currentActiveIndex + 1) % currentSuggestions.length;
+        updateActiveSuggestionItem();
+      }
+    } else if (e.key === 'ArrowUp') {
+      if (isDropdownVisible && currentSuggestions.length > 0) {
+        e.preventDefault();
+        currentActiveIndex = (currentActiveIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+        updateActiveSuggestionItem();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isDropdownVisible && currentActiveIndex >= 0 && currentSuggestions[currentActiveIndex]) {
+        selectSuggestion(currentSuggestions[currentActiveIndex]);
+      } else {
+        closeAutocomplete();
+        executeCitySearch(cityInput.value);
+      }
+    } else if (e.key === 'Escape') {
+      closeAutocomplete();
+    }
+  }
+
+  function updateActiveSuggestionItem() {
+    const items = autocompleteList.querySelectorAll('.autocomplete-item');
+    items.forEach((el, idx) => {
+      if (idx === currentActiveIndex) {
+        el.classList.add('active');
+        el.scrollIntoView({ block: 'nearest' });
+      } else {
+        el.classList.remove('active');
+      }
+    });
+  }
+
+  function closeAutocomplete() {
+    autocompleteList.classList.add('hidden');
+    autocompleteList.innerHTML = '';
+    currentActiveIndex = -1;
+    currentSuggestions = [];
+  }
+
+  // ==========================================================================
+  // 5. Real Current Location Weather (Browser Geolocation API)
+  // ==========================================================================
+
+  function handleCurrentLocationRequest() {
+    closeAutocomplete();
+    hideAlert();
+
+    // Verify browser Geolocation API support
+    if (!('geolocation' in navigator)) {
+      showAlert(
+        'Geolocation Unsupported',
+        'Your browser does not support geolocation detection. Please search for your city manually above.'
+      );
+      return;
+    }
+
+    setLoadingState(true, 'Detecting your current location...');
+    locationBtn.disabled = true;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        locationBtn.disabled = false;
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        setLoadingState(true, 'Retrieving live weather for your location...');
+        fetchWeatherByCoordinates(lat, lon);
+      },
+      (error) => {
+        locationBtn.disabled = false;
+        setLoadingState(false);
+        showDefaultState();
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            showAlert(
+              'Location Access Denied',
+              'You denied the request for current location. You can search for your city name manually in the search bar.'
+            );
+            break;
+          case error.POSITION_UNAVAILABLE:
+            showAlert(
+              'Location Unavailable',
+              'Location information is unavailable on your device or network. Please search by city name.'
+            );
+            break;
+          case error.TIMEOUT:
+            showAlert(
+              'Location Timed Out',
+              'The request to determine your location timed out. Please try again or search manually.'
+            );
+            break;
+          default:
+            showAlert(
+              'Location Error',
+              'An unexpected error occurred while detecting your location. Please enter your city name.'
+            );
+            break;
+        }
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  }
+
+  // ==========================================================================
+  // 6. Weather API Execution & Response Handling
+  // ==========================================================================
+
+  async function executeCitySearch(cityName) {
+    const trimmed = cityName ? cityName.trim() : '';
+
+    if (!trimmed) {
+      showAlert('Empty Search', 'Please enter a city name to search (e.g. Kanpur, Delhi, London).');
       cityInput.focus();
       return;
     }
 
-    // 2. Prevent duplicate submissions while in-flight
-    if (isFetching) {
-      if (activeAbortController) {
-        activeAbortController.abort();
-      }
-    }
+    fetchWeatherFromEndpoint(`/api/weather?city=${encodeURIComponent(trimmed)}`);
+  }
 
-    activeAbortController = new AbortController();
-    setLoadingState(true);
+  async function fetchWeatherByCoordinates(lat, lon) {
+    fetchWeatherFromEndpoint(`/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+  }
+
+  async function fetchWeatherFromEndpoint(endpoint) {
+    if (activeWeatherFetchController) {
+      activeWeatherFetchController.abort();
+    }
+    activeWeatherFetchController = new AbortController();
+
+    setLoadingState(true, 'Fetching live meteorological data...');
     hideAlert();
 
     try {
-      isFetching = true;
-      const endpoint = `/api/weather?city=${encodeURIComponent(trimmedCity)}`;
-
       const response = await fetch(endpoint, {
-        signal: activeAbortController.signal,
+        signal: activeWeatherFetchController.signal,
         headers: { 'Accept': 'application/json' }
       });
 
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        const errorMsg = result.error || 'Unable to retrieve weather data.';
-        const errCode = result.code || 'UNKNOWN_ERROR';
-        
-        let customTitle = 'Search Error';
-        if (response.status === 404) customTitle = 'City Not Found';
-        else if (response.status === 401) customTitle = 'API Authentication Failed';
-        else if (response.status === 429) customTitle = 'Rate Limit Reached';
-        else if (errCode === 'API_KEY_MISSING') customTitle = 'Server Configuration Required';
+        const errorMsg = result.error || 'Failed to retrieve weather data.';
+        let title = 'Weather Search Error';
 
-        showAlert(customTitle, errorMsg);
+        if (response.status === 404) title = 'City Not Found';
+        else if (response.status === 401) title = 'API Authentication Required';
+        else if (response.status === 429) title = 'Rate Limit Reached';
+        else if (result.code === 'API_KEY_MISSING') title = 'Configuration Required';
+
+        showAlert(title, errorMsg);
         showDefaultState();
         return;
       }
 
-      // Successful data retrieval
+      // Render valid weather payload
       renderWeatherData(result.data);
-      sessionStorage.setItem('weather_last_searched', trimmedCity);
 
     } catch (err) {
-      if (err.name === 'AbortError') {
-        // Request cancelled by another user action
-        return;
-      }
+      if (err.name === 'AbortError') return;
+
       showAlert(
-        'Connection Failed',
-        'Could not communicate with the weather server. Please check your internet connection and verify the backend is running.'
+        'Connection Error',
+        'Unable to communicate with the weather server. Please check your internet connection and verify the backend is running.'
       );
       showDefaultState();
     } finally {
-      isFetching = false;
       setLoadingState(false);
     }
   }
 
   // ==========================================================================
-  // 5. Data Rendering & Formatting
+  // 7. Data Rendering & Normalization
   // ==========================================================================
 
-  /**
-   * Safely updates all DOM elements with live weather response data.
-   * @param {object} weather - Processed weather object from backend.
-   */
   function renderWeatherData(weather) {
     const { location, temperature, condition, metrics, astronomy, timestamp } = weather;
 
-    // Location & Coordinates
+    // Location
     displayCity.textContent = location.city;
-    displayCountry.textContent = location.country || '--';
-    
+    const regionParts = [location.state, location.country].filter(Boolean);
+    displayCountry.textContent = regionParts.length > 0 ? regionParts.join(', ') : '';
+
+    // Coordinates
     const latFormatted = `${Math.abs(location.coordinates.latitude)}° ${location.coordinates.latitude >= 0 ? 'N' : 'S'}`;
     const lonFormatted = `${Math.abs(location.coordinates.longitude)}° ${location.coordinates.longitude >= 0 ? 'E' : 'W'}`;
     displayCoordinates.textContent = `${latFormatted}, ${lonFormatted}`;
@@ -275,32 +477,29 @@
     // Target City Local Time
     const cityLocalTime = calculateLocalTimeString(Date.now() / 1000, astronomy.timezoneOffset);
     const tzHours = astronomy.timezoneOffset / 3600;
-    const tzString = `GMT${tzHours >= 0 ? '+' : ''}${tzHours}`;
-    displayLocalTime.textContent = `Local: ${cityLocalTime} (${tzString})`;
+    const tzLabel = `GMT${tzHours >= 0 ? '+' : ''}${tzHours}`;
+    displayLocalTime.textContent = `Local: ${cityLocalTime} (${tzLabel})`;
 
-    // Timestamp
+    // Updated Time
     const updateTime = new Date(timestamp);
     displayLastUpdated.textContent = `Updated ${updateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
     // Main Temperatures
     displayTemp.textContent = temperature.current;
     displayFeelsLikeHero.textContent = `${temperature.feels_like}°C`;
-    valHigh.textContent = temperature.temp_max !== null ? `${temperature.temp_max}°C` : '--';
-    valLow.textContent = temperature.temp_min !== null ? `${temperature.temp_min}°C` : '--';
 
     // Condition & Icon
     displayCondition.textContent = condition.description || condition.main;
     weatherIconImg.src = condition.iconUrl;
-    weatherIconImg.alt = condition.description || 'Weather condition';
+    weatherIconImg.alt = condition.description || 'Current weather condition';
 
     // 1. Humidity
     if (metrics.humidity !== null) {
       valHumidity.textContent = metrics.humidity;
-      humidityBar.style.width = `${Math.min(100, Math.max(0, metrics.humidity))}%`;
       humidityDescription.textContent = getHumidityDescription(metrics.humidity);
     } else {
       valHumidity.textContent = '--';
-      humidityBar.style.width = '0%';
+      humidityDescription.textContent = 'Not available';
     }
 
     // 2. Wind Speed
@@ -318,18 +517,18 @@
       pressureStatus.textContent = getPressureDescription(metrics.pressure);
     } else {
       valPressure.textContent = '--';
-      pressureStatus.textContent = 'Barometric pressure';
+      pressureStatus.textContent = 'Not available';
     }
 
-    // 4. Feels Like Card
+    // 4. Feels Like
     valFeelsLike.textContent = temperature.feels_like;
     const diff = temperature.feels_like - temperature.current;
     if (diff === 0) {
-      feelsLikeSummary.textContent = 'Matches actual temperature';
+      feelsLikeSummary.textContent = 'Equal to air temp';
     } else if (diff > 0) {
-      feelsLikeSummary.textContent = `Feels +${diff}°C warmer`;
+      feelsLikeSummary.textContent = `+${diff}°C warmer`;
     } else {
-      feelsLikeSummary.textContent = `Feels ${diff}°C cooler`;
+      feelsLikeSummary.textContent = `${diff}°C cooler`;
     }
 
     // 5. Visibility
@@ -338,20 +537,19 @@
       visibilityStatus.textContent = getVisibilityDescription(metrics.visibilityKm);
     } else {
       valVisibility.textContent = '--';
-      visibilityStatus.textContent = 'Horizontal range';
+      visibilityStatus.textContent = 'Not available';
     }
 
     // 6. Cloudiness
     if (metrics.cloudiness !== null) {
       valCloudiness.textContent = metrics.cloudiness;
-      cloudinessBar.style.width = `${Math.min(100, Math.max(0, metrics.cloudiness))}%`;
       cloudsStatus.textContent = getCloudinessDescription(metrics.cloudiness);
     } else {
       valCloudiness.textContent = '--';
-      cloudinessBar.style.width = '0%';
+      cloudsStatus.textContent = 'Not available';
     }
 
-    // Solar Schedule (Formatted to City's Local Time!)
+    // Solar Schedule (Formatted to target city's local time)
     if (astronomy.sunrise) {
       valSunrise.textContent = calculateLocalTimeString(astronomy.sunrise, astronomy.timezoneOffset);
     } else {
@@ -374,21 +572,16 @@
       valDayLength.textContent = '-- hrs -- mins';
     }
 
-    // Show Results
+    // Show Results Panel
     showResultsView();
   }
 
   // ==========================================================================
-  // 6. Helper Functions (Timezone, Descriptions, UI States)
+  // 8. Helper Functions
   // ==========================================================================
 
-  /**
-   * Calculates the exact local 12-hour formatted time in a target city
-   * using UTC timestamp in seconds and city's timezone offset in seconds.
-   */
   function calculateLocalTimeString(unixSec, offsetSec) {
     if (!unixSec) return '--:-- --';
-    // Shift time by timezone offset
     const shiftedDate = new Date((unixSec + offsetSec) * 1000);
     let hours = shiftedDate.getUTCHours();
     const minutes = String(shiftedDate.getUTCMinutes()).padStart(2, '0');
@@ -399,20 +592,20 @@
 
   function getHumidityDescription(humidity) {
     if (humidity < 30) return 'Dry air condition';
-    if (humidity <= 60) return 'Comfortable humidity level';
+    if (humidity <= 60) return 'Comfortable level';
     if (humidity <= 80) return 'Humid environment';
     return 'Very humid / muggy';
   }
 
   function getPressureDescription(pressure) {
-    if (pressure < 1000) return 'Low pressure system';
-    if (pressure <= 1020) return 'Normal barometric pressure';
-    return 'High pressure system';
+    if (pressure < 1000) return 'Low pressure';
+    if (pressure <= 1020) return 'Normal barometric';
+    return 'High pressure';
   }
 
   function getVisibilityDescription(km) {
     const num = parseFloat(km);
-    if (num >= 10) return 'Maximum clear visibility';
+    if (num >= 10) return 'Maximum clear';
     if (num >= 5) return 'Good visibility';
     if (num >= 2) return 'Moderate haze';
     return 'Poor visibility / fog';
@@ -425,18 +618,17 @@
     return 'Overcast sky';
   }
 
-  // UI State toggles
-  function setLoadingState(isLoading) {
+  // View State Management
+  function setLoadingState(isLoading, message = 'Fetching live weather data...') {
     if (isLoading) {
+      loadingMessage.textContent = message;
       loadingState.classList.remove('hidden');
       defaultState.classList.add('hidden');
       weatherResults.classList.add('hidden');
       searchBtn.disabled = true;
-      cityInput.disabled = true;
     } else {
       loadingState.classList.add('hidden');
       searchBtn.disabled = false;
-      cityInput.disabled = false;
     }
   }
 
@@ -454,7 +646,6 @@
     alertTitle.textContent = title;
     alertMessage.textContent = message;
     errorAlert.classList.remove('hidden');
-    errorAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function hideAlert() {
